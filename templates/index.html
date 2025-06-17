@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Beets Frontend - Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>Welcome to Beets Frontend</h1>
+        {% if error %}
+        <div class="alert alert-warning">
+            <strong>Warning:</strong> {{ error }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">📚 Music Library</h5>
+                <p class="card-text">
+                    <strong>{{ library_count }}</strong> albums in your library
+                </p>
+                <a href="{{ url_for('library') }}" class="btn btn-primary">Browse Library</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">⭐ Wishlist</h5>
+                <p class="card-text">
+                    <strong>{{ wishlist_count }}</strong> albums on your wishlist
+                </p>
+                <a href="{{ url_for('wishlist') }}" class="btn btn-success">Manage Wishlist</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">🚀 Quick Actions</h5>
+                <p class="card-text">Common tasks you can perform:</p>
+                <ul>
+                    <li>Search and browse your music library</li>
+                    <li>Add albums to your wishlist from MusicBrainz</li>
+                    <li>Remove albums from wishlist</li>
+                    <li>Auto-update wishlist with new releases from your artists</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

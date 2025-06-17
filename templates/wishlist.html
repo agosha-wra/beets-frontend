@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Wishlist{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>Wishlist</h1>
+        
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="text" id="search-input" class="form-control" placeholder="Search MusicBrainz for albums...">
+                    <button id="search-musicbrainz" class="btn btn-primary">Search</button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <button id="auto-update-btn" class="btn btn-success">Auto-Update</button>
+                <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
+            </div>
+        </div>
+        
+        <div id="search-results" style="display: none;">
+            <h5>Search Results</h5>
+            <div id="search-results-content"></div>
+        </div>
+        
+        <div id="loading" class="text-center" style="display: none;">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+        
+        <div id="wishlist-content">
+            <!-- Wishlist will be populated here -->
+        </div>
+    </div>
+</div>
+
+<!-- Toast container for notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="notification-toast" class="toast" role="alert">
+        <div class="toast-header">
+            <strong class="me-auto">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toast-message">
+            <!-- Message will be populated here -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadWishlist() {
+    const loading = document.getElementById('loading');
+    const content = document.getElementById('wishlist-content');
+    
+    loading.style.display = 'block';
+    content.innerHTML = '';
+    
+    fetch('/api/wishlist')
+        .then(response => response.json())
+        .then(data => {
+            loading.style.display = 'none';
+            
+            if (data.error) {
+                content.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            
+            if (data.albums.length === 0) {
+                content.innerHTML = '<div class="alert alert-info">Your wishlist is empty.</div>';
+                return;
+            }
+            
+            let html = '<div class="row">';
+            data.albums.forEach(album => {
+                const autoMarker = album.auto_added ? ' <span class="badge bg-secondary">AUTO</span>' : '';
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${escapeHtml(album.title)}${autoMarker}</h6>
+                                <p class="card-text">
+                                    <strong>Artist:</strong> ${escapeHtml(album.artist)}<br>
+                                    <strong>Added:</strong> ${album.added_date}<br>
+                                    <small class="text-muted">MB ID: ${album.mb_id}</small>
+                                </p>
+                                <button class="btn btn-danger btn-sm" onclick="removeFromWishlist('${album.mb_id}')">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            loading.style.display = 'none';
+            content.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        });
+}
+
+function searchMusicBrainz() {
+    const searchTerm = document.getElementById('search-input').value.trim();
+    const searchResults = document.getElementById('search-results');
+    const searchResultsContent = document.getElementById('search-results-content');
+    
+    if (!searchTerm) {
+        showToast('Please enter a search term', 'warning');
+        return;
+    }
+    
+    searchResultsContent.innerHTML = '<div class="spinner-border" role="status"></div>';
+    searchResults.style.display = 'block';
+    
+    fetch('/api/wishlist/search', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ search: searchTerm })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            searchResultsContent.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            return;
+        }
+        
+        if (data.albums.length === 0) {
+            searchResultsContent.innerHTML = '<div class="alert alert-info">No albums found.</div>';
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        data.albums.forEach(album => {
+            html += `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${escapeHtml(album.title)}</h6>
+                        <p class="mb-1">${escapeHtml(album.artist)}</p>
+                        <small>${album.date}</small>
+                    </div>
+                    <button class="btn btn-success btn-sm" onclick="addToWishlist('${album.mb_id}', '${escapeHtml(album.artist)}', '${escapeHtml(album.title)}')">
+                        Add to Wishlist
+                    </button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        searchResultsContent.innerHTML = html;
+    })
+    .catch(error => {
+        searchResultsContent.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+    });
+}
+
+function addToWishlist(mbId, artist, title) {
+    fetch('/api/wishlist/add', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            mb_id: mbId,
+            artist: artist,
+            title: title
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showToast(data.error, 'danger');
+        } else {
+            showToast(data.message, 'success');
+            loadWishlist();
+            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('search-input').value = '';
+        }
+    })
+    .catch(error => {
+        showToast('Error adding to wishlist: ' + error.message, 'danger');
+    });
+}
+
+function removeFromWishlist(mbId) {
+    if (!confirm('Are you sure you want to remove this album from your wishlist?')) {
+        return;
+    }
+    
+    fetch('/api/wishlist/remove', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mb_id: mbId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showToast(data.error, 'danger');
+        } else {
+            showToast(data.message, 'success');
+            loadWishlist();
+        }
+    })
+    .catch(error => {
+        showToast('Error removing from wishlist: ' + error.message, 'danger');
+    });
+}
+
+function autoUpdate() {
+    const btn = document.getElementById('auto-update-btn');
+    const originalText = btn.textContent;
+    
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+    
+    fetch('/api/wishlist/auto-update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        
+        if (data.error) {
+            showToast(data.error, 'danger');
+        } else {
+            showToast(data.message, 'success');
+            if (data.added_count > 0) {
+                loadWishlist();
+            }
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        showToast('Error during auto-update: ' + error.message, 'danger');
+    });
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('notification-toast');
+    const toastMessage = document.getElementById('toast-message');
+    
+    // Set message and style
+    toastMessage.textContent = message;
+    toast.className = `toast show bg-${type}`;
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        toast.className = 'toast';
+    }, 3000);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Event listeners
+document.getElementById('search-musicbrainz').addEventListener('click', searchMusicBrainz);
+document.getElementById('auto-update-btn').addEventListener('click', autoUpdate);
+document.getElementById('refresh-btn').addEventListener('click', loadWishlist);
+
+document.getElementById('search-input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchMusicBrainz();
+    }
+});
+
+// Load initial data
+loadWishlist();
+</script>
+{% endblock %}

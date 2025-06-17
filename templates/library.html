@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Music Library{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>Music Library</h1>
+        
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <input type="text" id="library-search" class="form-control" placeholder="Search library...">
+            </div>
+            <div class="col-md-6">
+                <button id="search-btn" class="btn btn-primary">Search</button>
+                <button id="clear-search-btn" class="btn btn-secondary">Clear</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="text-center" style="display: none;">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+        
+        <div id="library-results">
+            <!-- Results will be populated here -->
+        </div>
+        
+        <nav id="pagination" style="display: none;">
+            <ul class="pagination justify-content-center">
+                <!-- Pagination will be populated here -->
+            </ul>
+        </nav>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let currentSearch = '';
+
+function loadLibrary(page = 1, search = '') {
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('library-results');
+    
+    loading.style.display = 'block';
+    results.innerHTML = '';
+    
+    const params = new URLSearchParams({
+        page: page,
+        per_page: 20,
+        search: search
+    });
+    
+    fetch(`/api/library?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            loading.style.display = 'none';
+            
+            if (data.error) {
+                results.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            
+            if (data.albums.length === 0) {
+                results.innerHTML = '<div class="alert alert-info">No albums found.</div>';
+                return;
+            }
+            
+            let html = '<div class="row">';
+            data.albums.forEach(album => {
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${escapeHtml(album.title)}</h6>
+                                <p class="card-text">
+                                    <strong>Artist:</strong> ${escapeHtml(album.artist)}<br>
+                                    <strong>Year:</strong> ${album.year || 'Unknown'}<br>
+                                    <small class="text-muted">ID: ${album.id}</small>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            results.innerHTML = html;
+            
+            // Update pagination
+            updatePagination(data.page, data.total_pages);
+        })
+        .catch(error => {
+            loading.style.display = 'none';
+            results.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        });
+}
+
+function updatePagination(currentPage, totalPages) {
+    const pagination = document.getElementById('pagination');
+    const paginationList = pagination.querySelector('.pagination');
+    
+    if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
+    }
+    
+    pagination.style.display = 'block';
+    paginationList.innerHTML = '';
+    
+    // Previous button
+    if (currentPage > 1) {
+        paginationList.innerHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadLibrary(${currentPage - 1}, '${currentSearch}')">Previous</a>
+            </li>
+        `;
+    }
+    
+    // Page numbers
+    for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+        const active = i === currentPage ? 'active' : '';
+        paginationList.innerHTML += `
+            <li class="page-item ${active}">
+                <a class="page-link" href="#" onclick="loadLibrary(${i}, '${currentSearch}')">${i}</a>
+            </li>
+        `;
+    }
+    
+    // Next button
+    if (currentPage < totalPages) {
+        paginationList.innerHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadLibrary(${currentPage + 1}, '${currentSearch}')">Next</a>
+            </li>
+        `;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Event listeners
+document.getElementById('search-btn').addEventListener('click', function() {
+    currentSearch = document.getElementById('library-search').value;
+    currentPage = 1;
+    loadLibrary(currentPage, currentSearch);
+});
+
+document.getElementById('clear-search-btn').addEventListener('click', function() {
+    document.getElementById('library-search').value = '';
+    currentSearch = '';
+    currentPage = 1;
+    loadLibrary(currentPage, currentSearch);
+});
+
+document.getElementById('library-search').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('search-btn').click();
+    }
+});
+
+// Load initial data
+loadLibrary();
+</script>
+{% endblock %}

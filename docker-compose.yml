@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  beets-frontend:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ${BEETS_CONFIG_DIR:-./config}:/config
+      - ${BEETS_LIBRARY_DIR:-./library}:/library
+      - ${BEETS_MUSIC_DIR:-./music}:/music
+    environment:
+      - BEETSDIR=/config
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+    restart: unless-stopped
