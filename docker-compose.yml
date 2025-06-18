@@ -6,11 +6,12 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ${BEETS_CONFIG_DIR:-./config}:/config
-      - ${BEETS_LIBRARY_DIR:-./library}:/library
-      - ${BEETS_MUSIC_DIR:-./music}:/music
+      - /home/agosha/.config/beets:/config
+      - /home/agosha/.config/beets:/library
+      - /DATA/Media/Music:/music
     environment:
       - BEETSDIR=/config
       - FLASK_ENV=production
       - FLASK_DEBUG=0
     restart: unless-stopped
+    user: "1000:1000"
