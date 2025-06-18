@@ -50,7 +50,7 @@ function loadLibrary(page = 1, search = '') {
     
     const params = new URLSearchParams({
         page: page,
-        per_page: 20,
+        per_page: 100,  // 100 albums per page
         search: search
     });
     
@@ -69,24 +69,43 @@ function loadLibrary(page = 1, search = '') {
                 return;
             }
             
-            let html = '<div class="row">';
-            data.albums.forEach(album => {
+            // Create list format
+            let html = `
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Library Albums</h5>
+                        <small class="text-muted">
+                            Showing ${(page - 1) * 100 + 1} to ${Math.min(page * 100, data.total)} of ${data.total} albums
+                        </small>
+                    </div>
+                    <div class="list-group list-group-flush">
+            `;
+            
+            data.albums.forEach((album, index) => {
+                const isOdd = index % 2 === 1;
                 html += `
-                    <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-title">${escapeHtml(album.title)}</h6>
-                                <p class="card-text">
-                                    <strong>Artist:</strong> ${escapeHtml(album.artist)}<br>
-                                    <strong>Year:</strong> ${album.year || 'Unknown'}<br>
-                                    <small class="text-muted">ID: ${album.id}</small>
-                                </p>
+                    <div class="list-group-item ${isOdd ? 'list-group-item-light' : ''}">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <strong>${escapeHtml(album.artist)}</strong> - ${escapeHtml(album.title)}
+                                </h6>
+                                <small class="text-muted">
+                                    ${album.year ? `Year: ${album.year} • ` : ''}ID: ${album.id}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted">#${(page - 1) * 100 + index + 1}</small>
                             </div>
                         </div>
                     </div>
                 `;
             });
-            html += '</div>';
+            
+            html += `
+                    </div>
+                </div>
+            `;
             
             results.innerHTML = html;
             
@@ -111,17 +130,40 @@ function updatePagination(currentPage, totalPages) {
     pagination.style.display = 'block';
     paginationList.innerHTML = '';
     
-    // Previous button
+    // First button
     if (currentPage > 1) {
         paginationList.innerHTML += `
             <li class="page-item">
-                <a class="page-link" href="#" onclick="loadLibrary(${currentPage - 1}, '${currentSearch}')">Previous</a>
+                <a class="page-link" href="#" onclick="loadLibrary(1, '${currentSearch}')">&laquo; First</a>
             </li>
         `;
     }
     
-    // Page numbers
-    for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+    // Previous button
+    if (currentPage > 1) {
+        paginationList.innerHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadLibrary(${currentPage - 1}, '${currentSearch}')">&lsaquo; Previous</a>
+            </li>
+        `;
+    }
+    
+    // Page numbers (show current page and 2 pages on each side)
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    if (startPage > 1) {
+        paginationList.innerHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadLibrary(1, '${currentSearch}')">1</a>
+            </li>
+        `;
+        if (startPage > 2) {
+            paginationList.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
         const active = i === currentPage ? 'active' : '';
         paginationList.innerHTML += `
             <li class="page-item ${active}">
@@ -130,11 +172,31 @@ function updatePagination(currentPage, totalPages) {
         `;
     }
     
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationList.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        paginationList.innerHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadLibrary(${totalPages}, '${currentSearch}')">${totalPages}</a>
+            </li>
+        `;
+    }
+    
     // Next button
     if (currentPage < totalPages) {
         paginationList.innerHTML += `
             <li class="page-item">
-                <a class="page-link" href="#" onclick="loadLibrary(${currentPage + 1}, '${currentSearch}')">Next</a>
+                <a class="page-link" href="#" onclick="loadLibrary(${currentPage + 1}, '${currentSearch}')">Next &rsaquo;</a>
+            </li>
+        `;
+    }
+    
+    // Last button
+    if (currentPage < totalPages) {
+        paginationList.innerHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadLibrary(${totalPages}, '${currentSearch}')">Last &raquo;</a>
             </li>
         `;
     }

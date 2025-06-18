@@ -6,9 +6,8 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - /home/agosha/.config/beets:/config
-      - /home/agosha/.config/beets:/library
-      - /DATA/Media/Music:/music
+      - /home/agosha/.config/beets:/config:ro  # Use absolute path
+      - /DATA/Media/Music:/music:rw
     environment:
       - BEETSDIR=/config
       - FLASK_ENV=production

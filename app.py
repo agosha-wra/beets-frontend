@@ -55,11 +55,7 @@ class BeetsInterface:
     def _init_wishlist_db(self):
         """Initialize wishlist database."""
         try:
-            if self.lib:
-                music_dir = beets_config['directory'].as_str()
-                self.wishlist_db_path = os.path.join(music_dir, 'wishlist.db')
-            else:
-                self.wishlist_db_path = '/config/wishlist.db'
+            self.wishlist_db_path = os.path.join('/music', 'wishlist.db')
             
             # Create wishlist database if it doesn't exist
             conn = sqlite3.connect(self.wishlist_db_path)
@@ -190,27 +186,112 @@ def api_wishlist():
         conn = sqlite3.connect(beets_interface.wishlist_db_path)
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT mb_id, artist, album, added_date, auto_added
-            FROM wishlist
-            ORDER BY added_date DESC
-        ''')
+        # Check what columns exist
+        cursor.execute("PRAGMA table_info(wishlist)")
+        columns = [column[1] for column in cursor.fetchall()]
+        has_release_date = 'release_date' in columns
+        has_release_year = 'release_year' in columns
+        
+        if has_release_date:
+            cursor.execute('''
+                SELECT mb_id, artist, album, added_date, auto_added, release_date, release_year
+                FROM wishlist
+                ORDER BY added_date DESC
+            ''')
+        else:
+            cursor.execute('''
+                SELECT mb_id, artist, album, added_date, auto_added
+                FROM wishlist
+                ORDER BY added_date DESC
+            ''')
         
         rows = cursor.fetchall()
         conn.close()
         
         albums = []
         for row in rows:
-            mb_id, artist, album, added_date, auto_added = row
+            if has_release_date:
+                mb_id, artist, album, added_date, auto_added, release_date, release_year = row
+            else:
+                mb_id, artist, album, added_date, auto_added = row
+                release_date = None
+                release_year = None
+            
             albums.append({
                 'mb_id': mb_id,
                 'artist': artist,
                 'title': album,
                 'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
-                'auto_added': bool(auto_added)
+                'auto_added': bool(auto_added),
+                'release_date': release_date,
+                'release_year': release_year,
+                'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
             })
         
         return jsonify({'albums': albums})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/wishlist/export')
+def api_wishlist_export():
+    """API endpoint to export all wishlist albums as JSON."""
+    try:
+        if not beets_interface.wishlist_db_path:
+            return jsonify({'error': 'Wishlist database not available'}), 500
+        
+        conn = sqlite3.connect(beets_interface.wishlist_db_path)
+        cursor = conn.cursor()
+        
+        # Check what columns exist
+        cursor.execute("PRAGMA table_info(wishlist)")
+        columns = [column[1] for column in cursor.fetchall()]
+        has_release_date = 'release_date' in columns
+        has_release_year = 'release_year' in columns
+        
+        if has_release_date:
+            cursor.execute('''
+                SELECT mb_id, artist, album, added_date, auto_added, release_date, release_year
+                FROM wishlist
+                ORDER BY added_date DESC
+            ''')
+        else:
+            cursor.execute('''
+                SELECT mb_id, artist, album, added_date, auto_added
+                FROM wishlist
+                ORDER BY added_date DESC
+            ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        albums = []
+        for row in rows:
+            if has_release_date:
+                mb_id, artist, album, added_date, auto_added, release_date, release_year = row
+            else:
+                mb_id, artist, album, added_date, auto_added = row
+                release_date = None
+                release_year = None
+            
+            albums.append({
+                'mb_id': mb_id,
+                'artist': artist,
+                'title': album,
+                'added_date': added_date,
+                'added_date_formatted': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
+                'auto_added': bool(auto_added),
+                'release_date': release_date,
+                'release_year': release_year,
+                'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
+            })
+        
+        return jsonify({
+            'success': True,
+            'total_albums': len(albums),
+            'albums': albums,
+            'exported_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -225,11 +306,24 @@ def api_wishlist_released():
         conn = sqlite3.connect(beets_interface.wishlist_db_path)
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT mb_id, artist, album, added_date, auto_added
-            FROM wishlist
-            ORDER BY added_date DESC
-        ''')
+        # Check what columns exist
+        cursor.execute("PRAGMA table_info(wishlist)")
+        columns = [column[1] for column in cursor.fetchall()]
+        has_release_date = 'release_date' in columns
+        has_release_year = 'release_year' in columns
+        
+        if has_release_date:
+            cursor.execute('''
+                SELECT mb_id, artist, album, added_date, auto_added, release_date, release_year
+                FROM wishlist
+                ORDER BY added_date DESC
+            ''')
+        else:
+            cursor.execute('''
+                SELECT mb_id, artist, album, added_date, auto_added
+                FROM wishlist
+                ORDER BY added_date DESC
+            ''')
         
         rows = cursor.fetchall()
         conn.close()
@@ -238,56 +332,110 @@ def api_wishlist_released():
         current_date = datetime.now()
         
         for row in rows:
-            mb_id, artist, album, added_date, auto_added = row
+            if has_release_date:
+                mb_id, artist, album, added_date, auto_added, release_date, release_year = row
+            else:
+                mb_id, artist, album, added_date, auto_added = row
+                release_date = None
+                release_year = None
             
-            try:
-                # Get release date from MusicBrainz
-                release_info = musicbrainzngs.get_release_by_id(mb_id)
-                release = release_info['release']
-                
-                release_date = release.get('date')
-                if release_date:
+            # If we have release_date from database, use it
+            if release_date:
+                try:
                     # Parse release date
-                    try:
-                        if len(release_date) == 4:  # Just year
-                            release_datetime = datetime.strptime(f"{release_date}-01-01", '%Y-%m-%d')
-                        elif len(release_date) == 7:  # Year-month
-                            release_datetime = datetime.strptime(f"{release_date}-01", '%Y-%m-%d')
-                        else:  # Full date
-                            release_datetime = datetime.strptime(release_date[:10], '%Y-%m-%d')
-                        
-                        # Check if already released
-                        if release_datetime <= current_date:
-                            released_albums.append({
-                                'mb_id': mb_id,
-                                'artist': artist,
-                                'title': album,
-                                'release_date': release_date,
-                                'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
-                                'auto_added': bool(auto_added),
-                                'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
-                            })
-                            
-                    except ValueError:
-                        # If we can't parse the date, assume it's released
+                    if len(release_date) == 4:  # Just year
+                        release_datetime = datetime.strptime(f"{release_date}-01-01", '%Y-%m-%d')
+                    elif len(release_date) == 7:  # Year-month
+                        release_datetime = datetime.strptime(f"{release_date}-01", '%Y-%m-%d')
+                    else:  # Full date
+                        release_datetime = datetime.strptime(release_date[:10], '%Y-%m-%d')
+                    
+                    # Check if already released
+                    if release_datetime <= current_date:
                         released_albums.append({
                             'mb_id': mb_id,
                             'artist': artist,
                             'title': album,
                             'release_date': release_date,
+                            'release_year': release_year,
                             'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
                             'auto_added': bool(auto_added),
                             'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}',
-                            'note': 'Date parsing failed, assumed released'
+                            'source': 'database'
                         })
-                
-                # Small delay to be nice to MusicBrainz
-                time.sleep(0.2)
-                
-            except Exception as e:
-                # If we can't get MusicBrainz data, skip this album
-                print(f"Error checking {artist} - {album}: {e}")
-                continue
+                        
+                except ValueError:
+                    # If we can't parse the date but we have one, assume it's released
+                    released_albums.append({
+                        'mb_id': mb_id,
+                        'artist': artist,
+                        'title': album,
+                        'release_date': release_date,
+                        'release_year': release_year,
+                        'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
+                        'auto_added': bool(auto_added),
+                        'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}',
+                        'source': 'database',
+                        'note': 'Date parsing failed, assumed released'
+                    })
+            else:
+                # No release date in database, try to get it from MusicBrainz
+                try:
+                    release_info = musicbrainzngs.get_release_by_id(mb_id)
+                    release = release_info['release']
+                    
+                    mb_release_date = release.get('date')
+                    if mb_release_date:
+                        try:
+                            if len(mb_release_date) == 4:
+                                release_datetime = datetime.strptime(f"{mb_release_date}-01-01", '%Y-%m-%d')
+                            elif len(mb_release_date) == 7:
+                                release_datetime = datetime.strptime(f"{mb_release_date}-01", '%Y-%m-%d')
+                            else:
+                                release_datetime = datetime.strptime(mb_release_date[:10], '%Y-%m-%d')
+                            
+                            if release_datetime <= current_date:
+                                mb_release_year = None
+                                try:
+                                    if len(mb_release_date) >= 4:
+                                        mb_release_year = int(mb_release_date[:4])
+                                except ValueError:
+                                    pass
+                                
+                                released_albums.append({
+                                    'mb_id': mb_id,
+                                    'artist': artist,
+                                    'title': album,
+                                    'release_date': mb_release_date,
+                                    'release_year': mb_release_year,
+                                    'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
+                                    'auto_added': bool(auto_added),
+                                    'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}',
+                                    'source': 'musicbrainz'
+                                })
+                                
+                        except ValueError:
+                            # Can't parse date, assume released
+                            released_albums.append({
+                                'mb_id': mb_id,
+                                'artist': artist,
+                                'title': album,
+                                'release_date': mb_release_date,
+                                'release_year': None,
+                                'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
+                                'auto_added': bool(auto_added),
+                                'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}',
+                                'source': 'musicbrainz',
+                                'note': 'Date parsing failed, assumed released'
+                            })
+                    
+                    # Small delay to be nice to MusicBrainz
+                    time.sleep(0.2)
+                    
+                except Exception as e:
+                    # If we can't get MusicBrainz data, skip this album
+                    print(f"Error checking {artist} - {album}: {e}")
+                    continue
         
         return jsonify({
             'success': True,
@@ -295,45 +443,6 @@ def api_wishlist_released():
             'released_albums': released_albums,
             'checked_at': current_date.strftime('%Y-%m-%d %H:%M:%S')
         })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/wishlist/search', methods=['POST'])
-def api_wishlist_search():
-    """Search MusicBrainz for albums to add to wishlist."""
-    try:
-        data = request.get_json()
-        search_term = data.get('search', '').strip()
-        
-        if not search_term:
-            return jsonify({'error': 'Search term required'}), 400
-        
-        # Search MusicBrainz
-        result = musicbrainzngs.search_releases(
-            query=search_term,
-            limit=5,
-            type='album'
-        )
-        
-        if not result['release-list']:
-            return jsonify({'albums': []})
-        
-        albums = []
-        for release in result['release-list'][:5]:
-            artist = release.get('artist-credit', [{}])[0].get('name', 'Unknown Artist')
-            title = release.get('title', 'Unknown Title')
-            date = release.get('date', 'Unknown Date')
-            mb_id = release['id']
-            
-            albums.append({
-                'mb_id': mb_id,
-                'artist': artist,
-                'title': title,
-                'date': date
-            })
-        
-        return jsonify({'albums': albums})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -346,9 +455,29 @@ def api_wishlist_add():
         mb_id = data.get('mb_id')
         artist = data.get('artist')
         title = data.get('title')
+        release_date = data.get('release_date', '')
         
         if not all([mb_id, artist, title]):
             return jsonify({'error': 'Missing required fields'}), 400
+        
+        # If no release date provided, try to get it from MusicBrainz
+        if not release_date:
+            try:
+                release_info = musicbrainzngs.get_release_by_id(mb_id)
+                release = release_info['release']
+                release_date = release.get('date', '')
+            except Exception as e:
+                print(f"Could not get release date from MusicBrainz: {e}")
+                release_date = ''
+        
+        # Parse release year from date
+        release_year = None
+        if release_date:
+            try:
+                if len(release_date) >= 4:
+                    release_year = int(release_date[:4])
+            except ValueError:
+                pass
         
         # Check if already in library
         if beets_interface.lib:
@@ -376,16 +505,40 @@ def api_wishlist_add():
             conn.close()
             return jsonify({'error': 'Album already in wishlist'}), 400
         
-        # Insert
-        cursor.execute('''
-            INSERT INTO wishlist (mb_id, artist, album, added_date, auto_added)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (mb_id, artist, title, time.time(), False))
+        # Check what columns exist
+        cursor.execute("PRAGMA table_info(wishlist)")
+        columns = [column[1] for column in cursor.fetchall()]
+        has_release_date = 'release_date' in columns
+        
+        if has_release_date:
+            # Insert with release date
+            cursor.execute('''
+                INSERT INTO wishlist (mb_id, artist, album, added_date, auto_added, release_date, release_year)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (mb_id, artist, title, time.time(), False, release_date, release_year))
+        else:
+            # Insert without release date (backward compatibility)
+            cursor.execute('''
+                INSERT INTO wishlist (mb_id, artist, album, added_date, auto_added)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (mb_id, artist, title, time.time(), False))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'message': f'Added {artist} - {title} to wishlist'})
+        return jsonify({
+            'success': True, 
+            'message': f'Added {artist} - {title} to wishlist',
+            'album': {
+                'mb_id': mb_id,
+                'artist': artist,
+                'title': title,
+                'release_date': release_date,
+                'release_year': release_year,
+                'auto_added': False,
+                'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
+            }
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -403,22 +556,47 @@ def api_wishlist_remove():
         conn = sqlite3.connect(beets_interface.wishlist_db_path)
         cursor = conn.cursor()
         
+        # Check what columns exist
+        cursor.execute("PRAGMA table_info(wishlist)")
+        columns = [column[1] for column in cursor.fetchall()]
+        has_release_date = 'release_date' in columns
+        
         # Get album info before removing
-        cursor.execute('SELECT artist, album FROM wishlist WHERE mb_id = ?', (mb_id,))
-        result = cursor.fetchone()
-        
-        if not result:
-            conn.close()
-            return jsonify({'error': 'Album not found in wishlist'}), 404
-        
-        artist, album = result
+        if has_release_date:
+            cursor.execute('SELECT artist, album, release_date, release_year FROM wishlist WHERE mb_id = ?', (mb_id,))
+            result = cursor.fetchone()
+            if result:
+                artist, album, release_date, release_year = result
+            else:
+                conn.close()
+                return jsonify({'error': 'Album not found in wishlist'}), 404
+        else:
+            cursor.execute('SELECT artist, album FROM wishlist WHERE mb_id = ?', (mb_id,))
+            result = cursor.fetchone()
+            if result:
+                artist, album = result
+                release_date = None
+                release_year = None
+            else:
+                conn.close()
+                return jsonify({'error': 'Album not found in wishlist'}), 404
         
         # Remove
         cursor.execute('DELETE FROM wishlist WHERE mb_id = ?', (mb_id,))
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'message': f'Removed {artist} - {album} from wishlist'})
+        return jsonify({
+            'success': True, 
+            'message': f'Removed {artist} - {album} from wishlist',
+            'removed_album': {
+                'mb_id': mb_id,
+                'artist': artist,
+                'title': album,
+                'release_date': release_date,
+                'release_year': release_year
+            }
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -439,6 +617,7 @@ def api_wishlist_auto_update():
                     artists.append((album.mb_albumartistid, album.albumartist))
         
         added_count = 0
+        added_albums = []
         auto_check_days = 30  # Default
         
         for artist_mb_id, artist_name in artists[:10]:  # Limit to first 10 for web interface
@@ -467,9 +646,16 @@ def api_wishlist_auto_update():
                             release_datetime = datetime.strptime(release_date[:10], '%Y-%m-%d')
                         
                         if release_datetime >= check_from_date:
-                            # Add to wishlist (this will handle duplicates)
                             mb_id = release['id']
                             title = release.get('title', 'Unknown Title')
+                            
+                            # Parse release year
+                            release_year = None
+                            try:
+                                if len(release_date) >= 4:
+                                    release_year = int(release_date[:4])
+                            except ValueError:
+                                pass
                             
                             # Check if already exists
                             conn = sqlite3.connect(beets_interface.wishlist_db_path)
@@ -479,12 +665,34 @@ def api_wishlist_auto_update():
                                 # Check if in library
                                 existing_albums = beets_interface.lib.albums(f'mb_albumid:{mb_id}')
                                 if not existing_albums:
-                                    cursor.execute('''
-                                        INSERT INTO wishlist (mb_id, artist, album, added_date, auto_added)
-                                        VALUES (?, ?, ?, ?, ?)
-                                    ''', (mb_id, artist_name, title, time.time(), True))
+                                    # Check what columns exist
+                                    cursor.execute("PRAGMA table_info(wishlist)")
+                                    columns = [column[1] for column in cursor.fetchall()]
+                                    has_release_date = 'release_date' in columns
+                                    
+                                    if has_release_date:
+                                        cursor.execute('''
+                                            INSERT INTO wishlist (mb_id, artist, album, added_date, auto_added, release_date, release_year)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        ''', (mb_id, artist_name, title, time.time(), True, release_date, release_year))
+                                    else:
+                                        cursor.execute('''
+                                            INSERT INTO wishlist (mb_id, artist, album, added_date, auto_added)
+                                            VALUES (?, ?, ?, ?, ?)
+                                        ''', (mb_id, artist_name, title, time.time(), True))
+                                    
                                     conn.commit()
                                     added_count += 1
+                                    
+                                    added_albums.append({
+                                        'mb_id': mb_id,
+                                        'artist': artist_name,
+                                        'title': title,
+                                        'release_date': release_date,
+                                        'release_year': release_year,
+                                        'auto_added': True,
+                                        'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
+                                    })
                             conn.close()
                             
                     except ValueError:
@@ -498,7 +706,8 @@ def api_wishlist_auto_update():
         return jsonify({
             'success': True, 
             'message': f'Auto-update complete. Added {added_count} albums.',
-            'added_count': added_count
+            'added_count': added_count,
+            'added_albums': added_albums
         })
         
     except Exception as e:
