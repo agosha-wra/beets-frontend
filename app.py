@@ -215,6 +215,90 @@ def api_wishlist():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/wishlist/released')
+def api_wishlist_released():
+    """API endpoint to get all wishlist albums that are already released."""
+    try:
+        if not beets_interface.wishlist_db_path:
+            return jsonify({'error': 'Wishlist database not available'}), 500
+        
+        conn = sqlite3.connect(beets_interface.wishlist_db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT mb_id, artist, album, added_date, auto_added
+            FROM wishlist
+            ORDER BY added_date DESC
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        released_albums = []
+        current_date = datetime.now()
+        
+        for row in rows:
+            mb_id, artist, album, added_date, auto_added = row
+            
+            try:
+                # Get release date from MusicBrainz
+                release_info = musicbrainzngs.get_release_by_id(mb_id)
+                release = release_info['release']
+                
+                release_date = release.get('date')
+                if release_date:
+                    # Parse release date
+                    try:
+                        if len(release_date) == 4:  # Just year
+                            release_datetime = datetime.strptime(f"{release_date}-01-01", '%Y-%m-%d')
+                        elif len(release_date) == 7:  # Year-month
+                            release_datetime = datetime.strptime(f"{release_date}-01", '%Y-%m-%d')
+                        else:  # Full date
+                            release_datetime = datetime.strptime(release_date[:10], '%Y-%m-%d')
+                        
+                        # Check if already released
+                        if release_datetime <= current_date:
+                            released_albums.append({
+                                'mb_id': mb_id,
+                                'artist': artist,
+                                'title': album,
+                                'release_date': release_date,
+                                'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
+                                'auto_added': bool(auto_added),
+                                'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
+                            })
+                            
+                    except ValueError:
+                        # If we can't parse the date, assume it's released
+                        released_albums.append({
+                            'mb_id': mb_id,
+                            'artist': artist,
+                            'title': album,
+                            'release_date': release_date,
+                            'added_date': datetime.fromtimestamp(added_date).strftime('%Y-%m-%d %H:%M:%S'),
+                            'auto_added': bool(auto_added),
+                            'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}',
+                            'note': 'Date parsing failed, assumed released'
+                        })
+                
+                # Small delay to be nice to MusicBrainz
+                time.sleep(0.2)
+                
+            except Exception as e:
+                # If we can't get MusicBrainz data, skip this album
+                print(f"Error checking {artist} - {album}: {e}")
+                continue
+        
+        return jsonify({
+            'success': True,
+            'total_released': len(released_albums),
+            'released_albums': released_albums,
+            'checked_at': current_date.strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/wishlist/search', methods=['POST'])
 def api_wishlist_search():
     """Search MusicBrainz for albums to add to wishlist."""
