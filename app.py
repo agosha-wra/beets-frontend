@@ -39,29 +39,46 @@ class BeetsInterface:
     def init_beets(self):
         """Initialize beets library connection."""
         try:
-            import beets.library
-            import beets.config
+            print("Attempting to import and initialize beets...")
             
-            # Try to load beets config
+            # Import beets components (use the working imports)
+            import beets
+            from beets import library
+            from beets import config  # This is the correct way!
+            
+            print(f"✓ Beets {beets.__version__} imported successfully")
+            
+            # Initialize config
+            config.read()  # Load default config
+            print("✓ Default config loaded")
+            
+            # Try to load custom config if it exists
             if os.path.exists(BEETS_CONFIG_PATH):
-                beets.config.read(BEETS_CONFIG_PATH)
+                print(f"Loading custom config: {BEETS_CONFIG_PATH}")
+                config.read(BEETS_CONFIG_PATH)
+                print("✓ Custom config loaded")
             
             # Initialize library
             if os.path.exists(BEETS_DB_PATH):
-                self.lib = beets.library.Library(BEETS_DB_PATH)
-                print(f"Connected to beets library: {BEETS_DB_PATH}")
+                self.lib = library.Library(BEETS_DB_PATH)
+                print(f"✓ Connected to beets library: {BEETS_DB_PATH}")
             else:
-                print(f"Beets database not found: {BEETS_DB_PATH}")
+                print(f"⚠ Beets database not found: {BEETS_DB_PATH}")
+                self.lib = None
             
             # Set wishlist database path
-            music_dir = os.path.dirname(MUSIC_DIR)
+            config_dir = os.path.dirname(MUSIC_PATH)
             self.wishlist_db_path = os.path.join(config_dir, 'wishlist.db')
-            print(f"Wishlist database path: {self.wishlist_db_path}")
+            print(f"✓ Wishlist database path: {self.wishlist_db_path}")
             
-        except ImportError:
-            print("Beets not available - running in standalone mode")
+        except ImportError as e:
+            print(f"Beets not available - running in standalone mode: {e}")
+            self.lib = None
         except Exception as e:
             print(f"Error initializing beets: {e}")
+            import traceback
+            traceback.print_exc()
+            self.lib = None
 
 class SlskdClient:
     def __init__(self, base_url, api_key=None):
