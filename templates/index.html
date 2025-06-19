@@ -1,59 +1,264 @@
-{% extends "base.html" %}
-
-{% block title %}Beets Frontend - Home{% endblock %}
-
-{% block content %}
-<div class="row">
-    <div class="col-12">
-        <h1>Welcome to Beets Frontend</h1>
-        {% if error %}
-        <div class="alert alert-warning">
-            <strong>Warning:</strong> {{ error }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beets Frontend</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4rem 0;
+        }
+        .stat-card {
+            transition: transform 0.3s ease;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .recent-album {
+            border-left: 4px solid #007bff;
+            padding-left: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-music me-2"></i>Beets Frontend
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link active" href="/">
+                    <i class="fas fa-home me-1"></i>Dashboard
+                </a>
+                <a class="nav-link" href="/library">
+                    <i class="fas fa-compact-disc me-1"></i>Library
+                </a>
+                <a class="nav-link" href="/wishlist">
+                    <i class="fas fa-heart me-1"></i>Wishlist
+                </a>
+            </div>
         </div>
-        {% endif %}
-    </div>
-</div>
+    </nav>
 
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">📚 Music Library</h5>
-                <p class="card-text">
-                    <strong>{{ library_count }}</strong> albums in your library
-                </p>
-                <a href="{{ url_for('library') }}" class="btn btn-primary">Browse Library</a>
+    <div class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 mb-3">
+                <i class="fas fa-music me-3"></i>Beets Frontend
+            </h1>
+            <p class="lead">Manage your music library and wishlist</p>
+        </div>
+    </div>
+
+    <div class="container my-5">
+        <!-- Library Stats -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <h3 class="mb-4">
+                    <i class="fas fa-chart-bar me-2"></i>Library Statistics
+                </h3>
+            </div>
+            <div id="statsContainer" class="col-12">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading library statistics...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Albums -->
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">
+                    <i class="fas fa-clock me-2"></i>Recently Added Albums
+                </h3>
+            </div>
+            <div id="recentContainer" class="col-12">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading recent albums...</p>
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">⭐ Wishlist</h5>
-                <p class="card-text">
-                    <strong>{{ wishlist_count }}</strong> albums on your wishlist
-                </p>
-                <a href="{{ url_for('wishlist') }}" class="btn btn-success">Manage Wishlist</a>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🚀 Quick Actions</h5>
-                <p class="card-text">Common tasks you can perform:</p>
-                <ul>
-                    <li>Search and browse your music library</li>
-                    <li>Add albums to your wishlist from MusicBrainz</li>
-                    <li>Remove albums from wishlist</li>
-                    <li>Auto-update wishlist with new releases from your artists</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '0 minutes';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            }
+            return `${minutes} minutes`;
+        }
+
+        async function loadLibraryStats() {
+            try {
+                const response = await fetch('/api/library/stats');
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('statsContainer').innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                const statsHtml = `
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="card stat-card text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-compact-disc fa-2x text-primary mb-2"></i>
+                                    <h4 class="card-title">${data.albums.toLocaleString()}</h4>
+                                    <p class="card-text text-muted">Albums</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card stat-card text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-music fa-2x text-success mb-2"></i>
+                                    <h4 class="card-title">${data.tracks.toLocaleString()}</h4>
+                                    <p class="card-text text-muted">Tracks</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card stat-card text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-clock fa-2x text-info mb-2"></i>
+                                    <h4 class="card-title">${formatDuration(data.duration)}</h4>
+                                    <p class="card-text text-muted">Duration</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card stat-card text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-hdd fa-2x text-warning mb-2"></i>
+                                    <h4 class="card-title">${formatBytes(data.size)}</h4>
+                                    <p class="card-text text-muted">Storage</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${Object.keys(data.formats).length > 0 ? `
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5>File Formats</h5>
+                            <div class="row">
+                                ${Object.entries(data.formats).map(([format, count]) => `
+                                    <div class="col-md-2 col-sm-4 col-6 mb-2">
+                                        <div class="text-center">
+                                            <span class="badge bg-secondary">${format.toUpperCase()}</span>
+                                            <br>
+                                            <small class="text-muted">${count.toLocaleString()} files</small>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                `;
+
+                document.getElementById('statsContainer').innerHTML = statsHtml;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                document.getElementById('statsContainer').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Failed to load library statistics
+                    </div>
+                `;
+            }
+        }
+
+        async function loadRecentAlbums() {
+            try {
+                const response = await fetch('/api/library/recent');
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('recentContainer').innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                if (data.albums.length === 0) {
+                    document.getElementById('recentContainer').innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="fas fa-compact-disc fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No recent albums found</h5>
+                            <p class="text-muted">Albums added in the last 4 weeks will appear here</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const albumsHtml = data.albums.map(album => `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="recent-album">
+                            <h6 class="mb-1">${escapeHtml(album.artist)} - ${escapeHtml(album.title)}</h6>
+                            <small class="text-muted">
+                                ${album.year || 'Unknown year'} • ${album.tracks} tracks • Added ${album.added}
+                            </small>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('recentContainer').innerHTML = `<div class="row">${albumsHtml}</div>`;
+            } catch (error) {
+                console.error('Error loading recent albums:', error);
+                document.getElementById('recentContainer').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Failed to load recent albums
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLibraryStats();
+            loadRecentAlbums();
+        });
+    </script>
+</body>
+</html>

@@ -6,11 +6,18 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - /home/agosha/.config/beets:/config:ro  # Use absolute path
+      - /home/agosha/.config/beets:/config:rw
       - /DATA/Media/Music:/music:rw
+      - /var/slskd/downloads:/downloads:rw
     environment:
       - BEETSDIR=/config
       - FLASK_ENV=production
       - FLASK_DEBUG=0
+      # slskd configuration with API key
+      - SLSKD_ENABLED=true
+      - SLSKD_URL=http://192.168.1.65:5030
+      - SLSKD_API_KEY=rzhaj8momc1qy88t
+      - SLSKD_DOWNLOAD_DIR=/downloads
     restart: unless-stopped
     user: "1000:1000"
+  

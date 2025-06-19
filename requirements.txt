@@ -1,4 +1,7 @@
 Flask==2.3.3
-beets>=1.6.0
-musicbrainzngs>=0.7.1
-python-dotenv==1.0.0
+requests==2.31.0
+musicbrainzngs==0.7.1
+schedule==1.2.0
+beets==1.6.0
+watchdog==3.0.0
+gunicorn==21.2.0
