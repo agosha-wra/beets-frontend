@@ -757,9 +757,11 @@ def api_library_stats():
         albums = list(beets_interface.lib.albums())
         items = list(beets_interface.lib.items())
         
-        # Calculate additional stats
+        # Calculate duration (keep this as it's from database, not filesystem)
         total_duration = sum(item.length for item in items if item.length)
-        total_size = sum(item.filesize for item in items if item.filesize)
+        
+        # Remove filesize calculation entirely
+        # total_size = sum(item.filesize for item in items if item.filesize)
         
         # Get format breakdown
         formats = {}
@@ -771,7 +773,7 @@ def api_library_stats():
             'albums': len(albums),
             'tracks': len(items),
             'duration': total_duration,
-            'size': total_size,
+            # 'size': total_size,  # Remove this line
             'formats': formats
         })
         
