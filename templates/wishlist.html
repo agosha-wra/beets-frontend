@@ -25,6 +25,15 @@
             background: linear-gradient(45deg, #fd7e14, #e83e8c);
             animation: pulse 2s infinite;
         }
+        .released-badge {
+            background: linear-gradient(45deg, #28a745, #20c997);
+        }
+        .upcoming-badge {
+            background: linear-gradient(45deg, #ffc107, #fd7e14);
+        }
+        .unknown-release-badge {
+            background: linear-gradient(45deg, #6c757d, #495057);
+        }
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -49,6 +58,12 @@
             background: #6c757d;
             color: white;
         }
+        .filter-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
     </style>
 </head>
 <body>
@@ -58,13 +73,13 @@
                 <i class="fas fa-music me-2"></i>Beets Frontend
             </a>
             <div class="navbar-nav ms-auto">
-                <a class="nav-link active" href="/">
+                <a class="nav-link" href="/">
                     <i class="fas fa-home me-1"></i>Dashboard
                 </a>
                 <a class="nav-link" href="/library">
                     <i class="fas fa-compact-disc me-1"></i>Library
                 </a>
-                <a class="nav-link" href="/wishlist">
+                <a class="nav-link active" href="/wishlist">
                     <i class="fas fa-heart me-1"></i>Wishlist
                 </a>
             </div>
@@ -99,12 +114,58 @@
             </div>
         </div>
 
+        <!-- Filters -->
+        <div class="filter-container">
+            <h5><i class="fas fa-filter me-2"></i>Filters</h5>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="releaseStatusFilter" class="form-label">Release Status</label>
+                    <select id="releaseStatusFilter" class="form-select">
+                        <option value="all">All Albums</option>
+                        <option value="released">Released</option>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="unknown">Unknown Release Date</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="addedTypeFilter" class="form-label">Added Type</label>
+                    <select id="addedTypeFilter" class="form-select">
+                        <option value="all">All Types</option>
+                        <option value="manual">Manual</option>
+                        <option value="auto">Auto-added</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="downloadStatusFilter" class="form-label">Download Status</label>
+                    <select id="downloadStatusFilter" class="form-select">
+                        <option value="all">All Status</option>
+                        <option value="downloading">Downloading</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="searchFilter" class="form-label">Search in Wishlist</label>
+                    <input type="text" id="searchFilter" class="form-control" placeholder="Search artist or album...">
+                </div>
+                <div class="col-md-6 mb-3 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary me-2" onclick="clearFilters()">
+                        <i class="fas fa-times me-1"></i>Clear Filters
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="loadWishlist()">
+                        <i class="fas fa-sync-alt me-1"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Wishlist -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h3><i class="fas fa-heart me-2 text-danger"></i>Your Wishlist</h3>
-            <button class="btn btn-outline-primary" onclick="loadWishlist()">
-                <i class="fas fa-sync-alt me-1"></i>Refresh
-            </button>
+            <div id="wishlistStats" class="text-muted">
+                <!-- Stats will be inserted here -->
+            </div>
         </div>
 
         <div id="wishlistContainer">
@@ -130,6 +191,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let allAlbums = []; // Store all albums for filtering
+
         // Utility functions
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
@@ -150,6 +213,109 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        function isAlbumReleased(releaseDate) {
+            if (!releaseDate) return null; // Unknown
+            
+            try {
+                const today = new Date();
+                let releaseDateTime;
+                
+                if (releaseDate.length === 10) { // YYYY-MM-DD
+                    releaseDateTime = new Date(releaseDate);
+                } else if (releaseDate.length === 7) { // YYYY-MM
+                    releaseDateTime = new Date(releaseDate + '-01');
+                } else if (releaseDate.length === 4) { // YYYY
+                    releaseDateTime = new Date(releaseDate + '-01-01');
+                } else {
+                    return null;
+                }
+                
+                return releaseDateTime <= today;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function getReleaseStatusBadge(releaseDate) {
+            const released = isAlbumReleased(releaseDate);
+            
+            if (released === null) {
+                return '<span class="badge unknown-release-badge me-2"><i class="fas fa-question me-1"></i>Unknown Release</span>';
+            } else if (released) {
+                return '<span class="badge released-badge me-2"><i class="fas fa-check-circle me-1"></i>Released</span>';
+            } else {
+                return '<span class="badge upcoming-badge me-2"><i class="fas fa-clock me-1"></i>Upcoming</span>';
+            }
+        }
+
+        // Filter functions
+        function applyFilters() {
+            const releaseStatusFilter = document.getElementById('releaseStatusFilter').value;
+            const addedTypeFilter = document.getElementById('addedTypeFilter').value;
+            const downloadStatusFilter = document.getElementById('downloadStatusFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+
+            const filteredAlbums = allAlbums.filter(album => {
+                // Release status filter
+                if (releaseStatusFilter !== 'all') {
+                    const released = isAlbumReleased(album.release_date);
+                    if (releaseStatusFilter === 'released' && released !== true) return false;
+                    if (releaseStatusFilter === 'upcoming' && released !== false) return false;
+                    if (releaseStatusFilter === 'unknown' && released !== null) return false;
+                }
+
+                // Added type filter
+                if (addedTypeFilter !== 'all') {
+                    if (addedTypeFilter === 'manual' && album.auto_added) return false;
+                    if (addedTypeFilter === 'auto' && !album.auto_added) return false;
+                }
+
+                // Download status filter
+                if (downloadStatusFilter !== 'all') {
+                    if (downloadStatusFilter === 'downloading' && album.download_status !== 'downloading') return false;
+                    if (downloadStatusFilter === 'pending' && album.download_status === 'downloading') return false;
+                }
+
+                // Search filter
+                if (searchFilter) {
+                    const searchText = `${album.artist} ${album.title}`.toLowerCase();
+                    if (!searchText.includes(searchFilter)) return false;
+                }
+
+                return true;
+            });
+
+            displayWishlist(filteredAlbums);
+            updateWishlistStats(filteredAlbums);
+        }
+
+        function clearFilters() {
+            document.getElementById('releaseStatusFilter').value = 'all';
+            document.getElementById('addedTypegetElementById('addedTypeFilter').value = 'all';
+            document.getElementById('downloadStatusFilter').value = 'all';
+            document.getElementById('searchFilter').value = '';
+            applyFilters();
+        }
+
+        function updateWishlistStats(albums) {
+            const total = albums.length;
+            const released = albums.filter(a => isAlbumReleased(a.release_date) === true).length;
+            const upcoming = albums.filter(a => isAlbumReleased(a.release_date) === false).length;
+            const downloading = albums.filter(a => a.download_status === 'downloading').length;
+
+            document.getElementById('wishlistStats').innerHTML = `
+                Total: ${total} • Released: ${released} • Upcoming: ${upcoming} • Downloading: ${downloading}
+            `;
+        }
+
+        // Add event listeners for filters
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('releaseStatusFilter').addEventListener('change', applyFilters);
+            document.getElementById('addedTypeFilter').addEventListener('change', applyFilters);
+            document.getElementById('downloadStatusFilter').addEventListener('change', applyFilters);
+            document.getElementById('searchFilter').addEventListener('input', applyFilters);
+        });
 
         // Search functionality
         let searchTimeout;
@@ -201,25 +367,33 @@
             if (releases.length === 0) {
                 container.innerHTML = '<div class="col-12"><div class="alert alert-info">No results found</div></div>';
             } else {
-                container.innerHTML = releases.map(release => `
-                    <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="card-title">${escapeHtml(release.artist)} - ${escapeHtml(release.title)}</h6>
-                                <p class="card-text small text-muted">
-                                    ${release.date || 'Unknown date'} • ${release.country || 'Unknown country'}
-                                    ${release.status ? `• ${release.status}` : ''}
-                                </p>
-                                <button class="btn btn-primary btn-sm" onclick="addToWishlist('${release.id}', '${escapeHtml(release.artist)}', '${escapeHtml(release.title)}', '${release.date || ''}')">
-                                    <i class="fas fa-plus me-1"></i>Add to Wishlist
-                                </button>
-                                <a href="https://musicbrainz.org/release/${release.id}" target="_blank" class="btn btn-outline-secondary btn-sm ms-1">
-                                    <i class="fas fa-external-link-alt"></i>
-                                </a>
+                container.innerHTML = releases.map(release => {
+                    const released = isAlbumReleased(release.date);
+                    const releaseStatusBadge = getReleaseStatusBadge(release.date);
+                    
+                    return `
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        ${releaseStatusBadge}
+                                    </div>
+                                    <h6 class="card-title">${escapeHtml(release.artist)} - ${escapeHtml(release.title)}</h6>
+                                    <p class="card-text small text-muted">
+                                        ${release.date || 'Unknown date'} • ${release.country || 'Unknown country'}
+                                        ${release.status ? `• ${release.status}` : ''}
+                                    </p>
+                                    <button class="btn btn-primary btn-sm" onclick="addToWishlist('${release.id}', '${escapeHtml(release.artist)}', '${escapeHtml(release.title)}', '${release.date || ''}')">
+                                        <i class="fas fa-plus me-1"></i>Add to Wishlist
+                                    </button>
+                                    <a href="https://musicbrainz.org/release/${release.id}" target="_blank" class="btn btn-outline-secondary btn-sm ms-1">
+                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             }
             
             resultsDiv.style.display = 'block';
@@ -243,7 +417,12 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showToast(`Added ${artist} - ${title} to wishlist`, 'success');
+                    let message = data.message;
+                    if (data.download_triggered) {
+                        showToast(message, 'success');
+                    } else {
+                        showToast(message, 'success');
+                    }
                     loadWishlist(); // Refresh the wishlist
                 } else {
                     showToast(data.error || 'Failed to add to wishlist', 'error');
@@ -260,7 +439,8 @@
                 const response = await fetch('/api/wishlist');
                 const data = await response.json();
                 
-                displayWishlist(data.albums || []);
+                allAlbums = data.albums || [];
+                applyFilters(); // Apply current filters
             } catch (error) {
                 console.error('Load wishlist error:', error);
                 document.getElementById('wishlistContainer').innerHTML = `
@@ -279,8 +459,8 @@
                 container.innerHTML = `
                     <div class="text-center py-5">
                         <i class="fas fa-heart-broken fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">Your wishlist is empty</h5>
-                        <p class="text-muted">Search for albums above to add them to your wishlist</p>
+                        <h5 class="text-muted">No albums match your filters</h5>
+                        <p class="text-muted">Try adjusting your filters or add more albums to your wishlist</p>
                     </div>
                 `;
                 return;
@@ -293,6 +473,8 @@
                 
                 const downloadStatus = album.download_status === 'downloading' ?
                     '<span class="badge downloading-badge me-2"><i class="fas fa-download me-1"></i>Downloading</span>' : '';
+                
+                const releaseStatusBadge = getReleaseStatusBadge(album.release_date);
                 
                 const releaseInfo = album.release_date ? 
                     ` (${album.release_date})` : 
@@ -310,6 +492,7 @@
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
+                                        ${releaseStatusBadge}
                                         ${autoType}
                                         ${downloadStatus}
                                     </div>
@@ -354,19 +537,7 @@
                 `;
             }).join('');
 
-            container.innerHTML = `
-                <div class="row">
-                    ${albumCards}
-                </div>
-                <div class="mt-4 text-center">
-                    <p class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Total: ${albums.length} album(s) • 
-                        Auto-added: ${albums.filter(a => a.auto_added).length} • 
-                        Manual: ${albums.filter(a => !a.auto_added).length}
-                    </p>
-                </div>
-            `;
+            container.innerHTML = `<div class="row">${albumCards}</div>`;
         }
 
         async function removeFromWishlist(mbId) {

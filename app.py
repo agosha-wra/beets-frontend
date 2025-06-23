@@ -929,6 +929,29 @@ def api_wishlist_add():
             except ValueError:
                 pass
         
+        # Check if album is already released
+        is_released = False
+        if release_date:
+            try:
+                from datetime import datetime
+                # Parse release date (handle different formats)
+                release_datetime = None
+                
+                if len(release_date) == 10:  # YYYY-MM-DD
+                    release_datetime = datetime.strptime(release_date, '%Y-%m-%d')
+                elif len(release_date) == 7:  # YYYY-MM
+                    release_datetime = datetime.strptime(release_date + '-01', '%Y-%m-%d')
+                elif len(release_date) == 4:  # YYYY
+                    release_datetime = datetime.strptime(release_date + '-01-01', '%Y-%m-%d')
+                
+                if release_datetime:
+                    is_released = release_datetime.date() <= datetime.now().date()
+                    
+            except ValueError as e:
+                print(f"Could not parse release date {release_date}: {e}")
+        
+        print(f"Album release info: date={release_date}, is_released={is_released}")
+        
         # Check if already in library
         if beets_interface.lib:
             existing_albums = beets_interface.lib.albums(f'mb_albumid:{mb_id}')
@@ -976,9 +999,36 @@ def api_wishlist_add():
         conn.commit()
         conn.close()
         
+        # Auto-download if album is already released and slskd is enabled
+        download_triggered = False
+        if is_released and SLSKD_CONFIG['enabled'] and slskd_client:
+            print(f"Album is already released, triggering auto-download...")
+            
+            album_info = {
+                'mb_id': mb_id,
+                'artist': artist,
+                'title': title,
+                'release_date': release_date,
+                'release_year': release_year,
+                'track_count': track_count
+            }
+            
+            # Start download in background thread
+            thread = threading.Thread(
+                target=search_and_download_album,
+                args=(album_info,)
+            )
+            thread.start()
+            download_triggered = True
+        
+        response_message = f'Added {artist} - {title} to wishlist'
+        if download_triggered:
+            response_message += ' and started download (album is already released)'
+        
         return jsonify({
             'success': True, 
-            'message': f'Added {artist} - {title} to wishlist',
+            'message': response_message,
+            'download_triggered': download_triggered,
             'album': {
                 'mb_id': mb_id,
                 'artist': artist,
@@ -987,6 +1037,7 @@ def api_wishlist_add():
                 'release_year': release_year,
                 'track_count': track_count,
                 'auto_added': False,
+                'is_released': is_released,
                 'musicbrainz_url': f'https://musicbrainz.org/release/{mb_id}'
             }
         })
