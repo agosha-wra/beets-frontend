@@ -60,9 +60,10 @@
         }
         .filter-container {
             background: #f8f9fa;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e9ecef;
         }
     </style>
 </head>
@@ -116,46 +117,45 @@
 
         <!-- Filters -->
         <div class="filter-container">
-            <h5><i class="fas fa-filter me-2"></i>Filters</h5>
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="releaseStatusFilter" class="form-label">Release Status</label>
-                    <select id="releaseStatusFilter" class="form-select">
-                        <option value="all">All Albums</option>
-                        <option value="released">Released</option>
-                        <option value="upcoming">Upcoming</option>
-                        <option value="unknown">Unknown Release Date</option>
-                    </select>
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <select id="releaseStatusFilter" class="form-select form-select-sm">
+                                <option value="all">All Status</option>
+                                <option value="released">Released</option>
+                                <option value="upcoming">Upcoming</option>
+                                <option value="unknown">Unknown Date</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select id="addedTypeFilter" class="form-select form-select-sm">
+                                <option value="all">All Types</option>
+                                <option value="manual">Manual</option>
+                                <option value="auto">Auto-added</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select id="downloadStatusFilter" class="form-select form-select-sm">
+                                <option value="all">All Downloads</option>
+                                <option value="downloading">Downloading</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" id="searchFilter" class="form-control form-control-sm" placeholder="Search...">
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-4 mb-3">
-                    <label for="addedTypeFilter" class="form-label">Added Type</label>
-                    <select id="addedTypeFilter" class="form-select">
-                        <option value="all">All Types</option>
-                        <option value="manual">Manual</option>
-                        <option value="auto">Auto-added</option>
-                    </select>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <label for="downloadStatusFilter" class="form-label">Download Status</label>
-                    <select id="downloadStatusFilter" class="form-select">
-                        <option value="all">All Status</option>
-                        <option value="downloading">Downloading</option>
-                        <option value="pending">Pending</option>
-                    </select>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="searchFilter" class="form-label">Search in Wishlist</label>
-                    <input type="text" id="searchFilter" class="form-control" placeholder="Search artist or album...">
-                </div>
-                <div class="col-md-6 mb-3 d-flex align-items-end">
-                    <button class="btn btn-outline-secondary me-2" onclick="clearFilters()">
-                        <i class="fas fa-times me-1"></i>Clear Filters
-                    </button>
-                    <button class="btn btn-outline-primary" onclick="loadWishlist()">
-                        <i class="fas fa-sync-alt me-1"></i>Refresh
-                    </button>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-secondary" onclick="clearFilters()" title="Clear Filters">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="loadWishlist()" title="Refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -292,7 +292,7 @@
 
         function clearFilters() {
             document.getElementById('releaseStatusFilter').value = 'all';
-            document.getElementById('addedTypegetElementById('addedTypeFilter').value = 'all';
+            document.getElementById('addedTypeFilter').value = 'all';
             document.getElementById('downloadStatusFilter').value = 'all';
             document.getElementById('searchFilter').value = '';
             applyFilters();
@@ -308,14 +308,6 @@
                 Total: ${total} • Released: ${released} • Upcoming: ${upcoming} • Downloading: ${downloading}
             `;
         }
-
-        // Add event listeners for filters
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('releaseStatusFilter').addEventListener('change', applyFilters);
-            document.getElementById('addedTypeFilter').addEventListener('change', applyFilters);
-            document.getElementById('downloadStatusFilter').addEventListener('change', applyFilters);
-            document.getElementById('searchFilter').addEventListener('input', applyFilters);
-        });
 
         // Search functionality
         let searchTimeout;
@@ -436,17 +428,22 @@
         // Wishlist functionality
         async function loadWishlist() {
             try {
+                console.log('Loading wishlist...');
                 const response = await fetch('/api/wishlist');
+                console.log('Response status:', response.status);
+                
                 const data = await response.json();
+                console.log('Response data:', data);
                 
                 allAlbums = data.albums || [];
+                console.log('Albums loaded:', allAlbums.length);
                 applyFilters(); // Apply current filters
             } catch (error) {
                 console.error('Load wishlist error:', error);
                 document.getElementById('wishlistContainer').innerHTML = `
                     <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        Failed to load wishlist
+                        Failed to load wishlist: ${error.message}
                     </div>
                 `;
             }
@@ -597,6 +594,13 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners for filters
+            document.getElementById('releaseStatusFilter').addEventListener('change', applyFilters);
+            document.getElementById('addedTypeFilter').addEventListener('change', applyFilters);
+            document.getElementById('downloadStatusFilter').addEventListener('change', applyFilters);
+            document.getElementById('searchFilter').addEventListener('input', applyFilters);
+            
+            // Load wishlist
             loadWishlist();
         });
     </script>
